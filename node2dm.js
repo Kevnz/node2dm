@@ -38,6 +38,7 @@ function C2DMReceiver(config, connection) {
     });
     this.server.bind(config.port || 8120, config.address || undefined);
     util.log("server is up");
+    return this;
 }
 
 
@@ -114,7 +115,6 @@ function C2DMConnection(config) {
         }
 
         var stringBody = querystring.stringify(c2dmPostBody);
-        util.log(stringBody);
         var requestOptions =  {
             'host': this.c2dmServerOptions.host,
             'path': this.c2dmServerOptions.path,
@@ -140,8 +140,7 @@ function C2DMConnection(config) {
             } else if (response.statusCode == 200) {
                 response.setEncoding('utf-8');
                 response.on('data', function(chunk) {
-                    util.log(util.inspect(response));
-                    util.log('body: ' + chunk);
+                    util.log('response: ' + chunk);
                     var returnedID = chunk.match(/id=/);
                     if (!returnedID) {
                         self.onError(chunk);
@@ -154,11 +153,8 @@ function C2DMConnection(config) {
 
         postRequest.on('error', function(error) {
             util.log(error);
-
         });
 
-        util.log('making request...');
-        util.log(util.inspect(postRequest));
         postRequest.write(stringBody);
         postRequest.end();
     }
@@ -198,11 +194,10 @@ function C2DMConnection(config) {
             });
             res.on('end', function() {
                 var token = buffer.match(/Auth=(.+)[$|\n]/);
-                util.log(buffer);
                 if (token) {
                     self.currentAuthorizationToken = token[1];
                 }
-                util.log(self.currentAuthorizationToken);
+                util.log('auth token: ' + self.currentAuthorizationToken);
                 self.emit('loginComplete');
                 authInProgress = false;
             });
