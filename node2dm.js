@@ -3,11 +3,8 @@ var dgram = require('dgram')
   , https = require('https')
   , querystring = require('querystring')
   , emitter = require('events').EventEmitter
+  , config = require('./config')
 
-var config = {
-    username: '',
-    password: ''
-}
 
 function C2DMMessage(deviceToken, collapseKey, notification) {
     this.deviceToken = deviceToken;
@@ -21,14 +18,15 @@ function C2DMReceiver(config, connection) {
 
     this.server = dgram.createSocket('udp4', function (msg, rinfo) {
 
-        var msgParts = msg.toString().split(':', 3);
-        if (msgParts.length != 3) {
+        var msgParts = msg.toString().match(/^([^:]+):([^:]+):(.*)$/);
+        util.log(msgParts);
+        if (!msgParts) {
             util.log("Invalid message");
             return;
         };
-        var token = msgParts.shift();
-        var collapseKey = msgParts.shift();
-        var notification = msgParts.shift();
+        var token = msgParts[1];
+        var collapseKey = msgParts[2];
+        var notification = msgParts[3];
 
         util.log(token);
         util.log(collapseKey);
@@ -36,7 +34,7 @@ function C2DMReceiver(config, connection) {
         var c2dmMessage = new C2DMMessage(token, collapseKey, notification);
         connection.submitMessage(c2dmMessage);
     });
-    this.server.bind(config.port || 8120, config.address || undefined);
+    this.server.bind(config.port || 8120);
     util.log("server is up");
     return this;
 }
@@ -60,15 +58,12 @@ function C2DMConnection(config) {
 
     }
 
-    this.currentAuthorizationToken = "";
+    this.currentAuthorizationToken = null;
+    this.authFails = 0;
 
     var blockedFromSending = false;
+    var retryAfter = 0;
     var authInProgress = false;
-
-    this.loginCredentials = {
-        username: config.username,
-        password: config.password
-    }
 
     this.onError = function(err) {
         var errMessage = err.match(/Error=(.+)$/);
@@ -103,15 +98,15 @@ function C2DMConnection(config) {
 
     this.sendRequest = function(message) {
         if (blockedFromSending) {
-            // For now, if we receive a 503,
-            // we'll drop any messages before
-            // the Retry-After expires
+            setTimeout(function(){
+                this.submitRequest(message);
+            }, retryAfter * 1000);
             return;
         }
         var c2dmPostBody = {
             registration_id: message.deviceToken,
             collapse_key: message.collapseKey,
-            "data.payload": message.notification,
+            "data.data": message.notification,
         }
 
         var stringBody = querystring.stringify(c2dmPostBody);
@@ -132,7 +127,7 @@ function C2DMConnection(config) {
                 // requeue message
                 self.submitMessage(message);
             } else if (response.statusCode == 503) {
-                var retryAfter = response.headers['Retry-After'] || 10;
+                retryAfter = parseInt(response.headers['Retry-After'], 10) || 10;
                 blockedFromSending = true;
                 setTimeout(function() {
                     blockedFromSending = false;
@@ -174,15 +169,25 @@ function C2DMConnection(config) {
         if (authInProgress) {
             return;
         }
+        if (this.authFails) {
+            // make this exponential
+            util.log("Sleeping because of fails: " + this.authFails);
+            setTimeout(function() {
+                self.authenticate();
+            }, this.authFails * 10 * 1000);
+            return;
+        }
+
+
         util.log('auth-ing with google');
         authInProgress = true;
 
         var loginBody = {
             "accountType": "HOSTED_OR_GOOGLE",
-            "Email": this.loginCredentials.username,
-            "Passwd": this.loginCredentials.password,
+            "Email": config.username,
+            "Passwd": config.password,
             "service": "ac2dm",
-            "source": "com.burbn.instagram"
+            "source": config.source
         }
         var loginBodyString = querystring.stringify(loginBody);
         this.loginOptions['headers']['Content-Length'] = loginBodyString.length;
@@ -196,9 +201,12 @@ function C2DMConnection(config) {
                 var token = buffer.match(/Auth=(.+)[$|\n]/);
                 if (token) {
                     self.currentAuthorizationToken = token[1];
+                    self.authFails = 0;
+                    self.emit('loginComplete');
+                } else {
+                    self.authFails++;
                 }
                 util.log('auth token: ' + self.currentAuthorizationToken);
-                self.emit('loginComplete');
                 authInProgress = false;
             });
         });
