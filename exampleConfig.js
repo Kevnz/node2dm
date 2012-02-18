@@ -8,8 +8,9 @@
  * address (address to bind to)
  * debugServerPort (port to bind for stats / debug server)
  * debugServeraddress (address to bind for stats / debug server)
- * serverCallbackHost / serverCallbackPort / serverCallbackPath (if specified, will be used
- *      to send a POST back to a service in order to handle bad tokens)
+ * serverCallbackHost / serverCallbackPort / serverCallbackPath / serverCallbackSharedSecret /
+ * serverCallbackProtocol
+ * (if specified, will be used to send a POST back to a service in order to handle bad tokens)
  *
  */
 

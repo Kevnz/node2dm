@@ -1,5 +1,6 @@
 var dgram = require('dgram')
   , util = require('util')
+  , http = require('http')
   , https = require('https')
   , querystring = require('querystring')
   , emitter = require('events').EventEmitter
@@ -108,13 +109,41 @@ function C2DMConnection(config) {
         self.clearPendingMessages();
     });
 
+    if (config.serverCallbackHost && config.serverCallbackPath) {
+        this.on('badregistration', function(message) {
+            // default to https
+            var baseClass = (config.serverCallbackProtocol == 'http' ? http : https);
+            var port = (config.serverCallbackPort || (config.serverCallbackProtocol == 'http' ? 80 : 443));
+            var postBody = {
+                device_token: message.deviceToken,
+                message_body: message.notification,
+                shared_secret: config.serverCallbackSharedSecret
+            }
+            var postBodyString = querystring.stringify(postBody);
+            var webhookOptions = {
+                host: config.serverCallbackHost,
+                port: port,
+                path: config.serverCallbackPath,
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': postBodyString.length
+                }
+            }
+            var webhookReq = baseClass.request(webhookOptions, function(res) {});
+            webhookReq.write(postBodyString);
+            webhookReq.end();
+        });
+    }
+
     this.onError = function(message, err) {
+
+        totalErrors++;
         var errMessage = err.match(/Error=(.+)$/);
         if (!errMessage) {
             util.log("Unknown error: " + err);
         }
         var googleError = errMessage[1];
-        util.log(googleError);
         switch (googleError) {
             case "QuotaExceeded":
                 util.log("WARNING: Google Quota Exceeded");
@@ -129,15 +158,15 @@ function C2DMConnection(config) {
                 break;
 
             case "DeviceQuotaExceeded":
-                this.rateLimitedTokens[message.deviceToken] = true;
+                self.rateLimitedTokens[message.deviceToken] = true;
                 break;
 
             case "InvalidRegistration":
-                // callback to our service
+                self.emit("badregistration", message);
                 break;
 
             case "NotRegistered":
-                // callback to our service
+                self.emit("badregistration", message);
                 break;
 
             case "MessageTooBig":
@@ -206,6 +235,7 @@ function C2DMConnection(config) {
         });
 
         postRequest.on('error', function(error) {
+            totalErrors++;
             util.log(error);
         });
 
@@ -318,7 +348,6 @@ function C2DMConnection(config) {
 
     });
     this.debugServer.listen(config.debugServerPort || 8121);
-
 }
 
 util.inherits(C2DMConnection, emitter);
