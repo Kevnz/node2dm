@@ -260,6 +260,10 @@ function C2DMConnection(config) {
         if (authInProgress) {
             return;
         }
+        if (self.authFails > 10) {
+            util.log("Could not auth after 10 attempts!");
+            process.exit(1);
+        })
 
         authInProgress = true;
 
@@ -286,6 +290,7 @@ function C2DMConnection(config) {
                     self.authFails = 0;
                     self.emit('loginComplete');
                 } else {
+                    util.log("Auth fail; body: " + buffer);
                     self.authFails++;
                 }
                 util.log('auth token: ' + self.currentAuthorizationToken);
