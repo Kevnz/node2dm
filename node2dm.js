@@ -263,7 +263,7 @@ function C2DMConnection(config) {
         if (self.authFails > 10) {
             util.log("Could not auth after 10 attempts!");
             process.exit(1);
-        })
+        }
 
         authInProgress = true;
 
