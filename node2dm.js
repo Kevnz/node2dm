@@ -291,6 +291,10 @@ function C2DMConnection(config) {
                     self.emit('loginComplete');
                 } else {
                     util.log("Auth fail; body: " + buffer);
+                    if (buffer.match(/CaptchaToken/)) {
+                        util.log("Must auth with captcha; exiting");
+                        process.exit(1);
+                    }
                     self.authFails++;
                 }
                 util.log('auth token: ' + self.currentAuthorizationToken);
