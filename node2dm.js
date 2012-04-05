@@ -216,7 +216,7 @@ function C2DMConnection(config) {
                 blockedFromSending = true;
                 self.requeueMessage(message);
                 setTimeout(function() {
-                    blockedFromSending = true;
+                    blockedFromSending = false;
                     self.emit('retryAfterExpired');
                 }, retryAfter * 1000);
             } else if (response.statusCode == 200) {
@@ -332,9 +332,10 @@ function C2DMConnection(config) {
 
                     var tokenAge = now - authTokenTime;
 
-                    stream.write("uptime: " + elapsed + "\n");
+                    stream.write("uptime: " + elapsed + " seconds\n");
                     stream.write("messages_sent: " + totalMessages + "\n");
                     stream.write("messages_queued: " + pendingMessages.length + "\n");
+                    stream.write("backing off: " + (blockedFromSending ? "true" : "false") + "\n");
                     stream.write("total_errors: " + totalErrors + "\n");
                     stream.write("rate_limited_tokens: " + Object.keys(self.rateLimitedTokens).length + "\n");
                     var loggedInStatus = (self.currentAuthorizationToken ? "true" :  "false");
