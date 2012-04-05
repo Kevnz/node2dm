@@ -77,7 +77,7 @@ function C2DMConnection(config) {
         pendingMessages.push(message);
     }
 
-    this.clearPendingMessages = function() {
+    this.retryPendingMessages = function() {
         var numMessages = pendingMessages.length;
         for (var i = 0; i < numMessages; i++) {
             var message = pendingMessages.shift();
@@ -102,11 +102,11 @@ function C2DMConnection(config) {
     }, 5 * 1000);
 
     this.on('loginComplete', function() {
-        self.clearPendingMessages();
+        self.retryPendingMessages();
     });
 
     this.on('retryAfterExpired', function() {
-        self.clearPendingMessages();
+        self.retryPendingMessages();
     });
 
     if (config.serverCallbackHost && config.serverCallbackPath) {
